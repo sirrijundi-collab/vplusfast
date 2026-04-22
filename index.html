@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#1e3a5f">
+  <title>visuplus Zeiterfassung</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
+  <script src="https://alcdn.msauth.net/browser/2.38.2/js/msal-browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg:#f4f2ef; --surface:#fff; --border:#e2ddd7; --border2:#c8c3bb;
+      --text:#1a1714; --text2:#6b6560; --text3:#a09890;
+      --accent:#1e3a5f; --accent-light:#eef2f8; --accent-bd:#b8c8e0;
+      --green:#14532d; --green-bg:#f0fdf4; --green-bd:#86efac;
+      --warn:#92400e; --warn-bg:#fffbeb; --warn-bd:#fcd34d;
+      --red:#991b1b; --radius:12px; --radius-sm:8px;
+      --shadow:0 1px 3px rgba(0,0,0,.08);
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100dvh;-webkit-font-smoothing:antialiased}
+    input,select,button{font-family:inherit}
+    #app{max-width:520px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column}
+
+    .topbar{background:var(--accent);color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100}
+    .topbar-title{font-size:15px;font-weight:600}
+    .topbar-sub{font-size:11px;opacity:.7;margin-top:2px}
+    .icon-btn{background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit}
+    .icon-btn:hover{background:rgba(255,255,255,.25)}
+
+    .steps{background:var(--surface);border-bottom:1px solid var(--border);display:none;flex-shrink:0}
+    .step{flex:1;text-align:center;padding:10px 4px;font-size:11px;font-weight:500;color:var(--text3);border-bottom:2px solid transparent}
+    .step.active{color:var(--accent);border-bottom-color:var(--accent)}
+    .step.done{color:var(--green);border-bottom-color:var(--green-bd)}
+
+    #settings-panel{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 20px;display:none}
+    #settings-panel.open{display:block}
+    #install-banner{background:var(--accent);color:#fff;padding:11px 18px;display:none;align-items:center;gap:10px;font-size:13px}
+    #install-banner.show{display:flex}
+    #install-banner button{background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:6px;padding:5px 11px;font-size:12px;cursor:pointer;font-family:inherit}
+
+    .content{padding:20px;flex:1}
+    .view{display:none}
+    .view.active{display:block}
+
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:12px;box-shadow:var(--shadow)}
+
+    .btn{display:block;width:100%;padding:12px 16px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:14px;font-weight:500;font-family:inherit;cursor:pointer;text-align:center;transition:background .15s}
+    .btn:hover{background:var(--bg)}
+    .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+    .btn-primary:hover{background:#162d4a}
+    .btn-primary:disabled{opacity:.4;cursor:not-allowed}
+    .btn-success{background:var(--green-bg);border-color:var(--green-bd);color:var(--green)}
+    .btn-success:hover{background:#dcfce7}
+    .btn-sm{width:auto;padding:6px 12px;font-size:12px;border-radius:6px}
+    .btn-ghost{background:none;border:none;color:var(--text2);cursor:pointer;font-family:inherit;font-size:13px;padding:4px 8px;display:block;text-align:center}
+    .btn-ms{display:flex;align-items:center;justify-content:center;gap:12px;background:#0078d4;border-color:#0078d4;color:#fff;padding:14px;font-size:15px}
+    .btn-ms:hover{background:#106ebe}
+
+    label{font-size:11px;color:var(--text2);display:block;margin-bottom:4px;font-weight:500}
+    input[type=text]{width:100%;padding:8px 11px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:13px;font-family:inherit}
+    input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(30,58,95,.1)}
+
+    .week-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .week-nav-title{font-size:14px;font-weight:600}
+    .week-nav-sub{font-size:11px;color:var(--text2)}
+    .nav-btn{background:var(--surface);border:1px solid var(--border2);border-radius:7px;padding:5px 13px;font-size:14px;cursor:pointer;color:var(--text2)}
+    .nav-btn:hover{background:var(--bg)}
+
+    .sel-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-size:12px;color:var(--text2)}
+    .link-btn{background:none;border:none;color:var(--accent);font-size:12px;cursor:pointer;font-family:inherit;padding:2px 5px}
+
+    .day-group{margin-bottom:16px}
+    .day-hdr{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:flex;justify-content:space-between}
+    .day-hrs{font-family:'DM Mono',monospace;font-weight:400}
+
+    .cal-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:7px;transition:border-color .15s,opacity .15s;box-shadow:var(--shadow)}
+    .cal-card.selected{border-color:var(--accent);box-shadow:0 0 0 3px rgba(30,58,95,.08)}
+    .cal-card.deselected{opacity:.35;box-shadow:none}
+    .cal-header{display:flex;gap:10px;align-items:flex-start;cursor:pointer;user-select:none}
+    .cal-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;margin-top:5px}
+    .cal-info{flex:1;min-width:0}
+    .cal-title{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .cal-meta{font-size:11px;color:var(--text2);margin-top:3px;display:flex;align-items:center;gap:6px;font-family:'DM Mono',monospace;flex-wrap:wrap}
+    .check{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;transition:all .15s;margin-top:1px}
+    .check.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+    .status-tag{display:inline-block;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:500}
+    .tag-auto{background:var(--accent-light);color:var(--accent);border:1px solid var(--accent-bd)}
+    .tag-saved{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd)}
+    .tag-missing{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-bd)}
+
+    .entry-fields{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .field-wrap{position:relative}
+    .dropdown{position:absolute;top:calc(100% + 3px);left:0;right:0;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-sm);z-index:200;display:none;max-height:160px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.12)}
+    .dropdown.open{display:block}
+    .dd-item{padding:8px 11px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border)}
+    .dd-item:last-child{border-bottom:none}
+    .dd-item:hover{background:var(--bg)}
+    .dd-item strong{display:block;font-size:13px}
+    .dd-item span{font-size:11px;color:var(--text2)}
+
+    .summary-table{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:14px}
+    .sum-row{display:flex;gap:8px;padding:9px 14px;font-size:12px;border-bottom:1px solid var(--border);align-items:center}
+    .sum-row:last-child{border-bottom:none;font-weight:600;font-size:13px}
+    .sum-row.warn{background:var(--warn-bg)}
+    .sum-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .sum-proj{font-family:'DM Mono',monospace;font-size:11px;color:var(--accent);white-space:nowrap}
+    .sum-pos{font-family:'DM Mono',monospace;font-size:11px;color:var(--text2);white-space:nowrap}
+    .sum-dur{font-family:'DM Mono',monospace;font-size:11px;white-space:nowrap}
+
+    .warn-box{background:var(--warn-bg);border:1px solid var(--warn-bd);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--warn);margin-bottom:12px}
+    .login-hero{text-align:center;padding:40px 16px 28px}
+    .login-icon{font-size:52px;margin-bottom:14px}
+    .login-title{font-size:22px;font-weight:600;margin-bottom:8px}
+    .login-sub{font-size:14px;color:var(--text2);line-height:1.6}
+
+    .spinner{width:28px;height:28px;border:2.5px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 14px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .loading{text-align:center;padding:40px 20px;color:var(--text2);font-size:14px}
+
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 20px;border-radius:100px;font-size:13px;font-weight:500;z-index:9999;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}
+    .toast.show{opacity:1}
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <div id="install-banner">
+    <span>📌 Als App installieren</span>
+    <button onclick="doInstall()">Installieren</button>
+    <button style="margin-left:auto;background:none;opacity:.7" onclick="this.closest('#install-banner').classList.remove('show')">✕</button>
+  </div>
+
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">visuplus Zeiterfassung</div>
+      <div class="topbar-sub" id="topbar-sub">Outlook → Excel</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="icon-btn" id="btn-settings" onclick="toggleSettings()" style="display:none">⚙ Projekte</button>
+      <button class="icon-btn" id="btn-logout" onclick="doLogout()" style="display:none">Abmelden</button>
+    </div>
+  </div>
+
+  <div id="settings-panel">
+    <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:10px;letter-spacing:.5px">GESPEICHERTE PROJEKTE</div>
+    <div id="proj-list"></div>
+    <div style="display:flex;gap:6px;margin-top:10px">
+      <input type="text" id="np-num" placeholder="Projektnummer" style="flex:1">
+      <input type="text" id="np-name" placeholder="Name (optional)" style="flex:1">
+      <button class="btn btn-sm btn-primary" onclick="addProject()">+ Hinzufügen</button>
+    </div>
+  </div>
+
+  <div class="steps" id="steps-bar" style="display:flex;visibility:hidden">
+    <div class="step" id="s1">1 · Anmeldung</div>
+    <div class="step" id="s2">2 · Kalender</div>
+    <div class="step" id="s3">3 · Export</div>
+  </div>
+
+  <div class="content">
+
+    <!-- LOGIN -->
+    <div id="view-login" class="view active">
+      <div class="login-hero">
+        <div class="login-icon">📅</div>
+        <div class="login-title">visuplus Zeiterfassung</div>
+        <div class="login-sub">Verbinde deinen Outlook-Kalender und exportiere deine Arbeitszeiten automatisch als visuplus Excel-Datei.</div>
+      </div>
+      <div class="card">
+        <button class="btn btn-ms" onclick="doLogin()">
+          <svg width="18" height="18" viewBox="0 0 23 23" fill="none">
+            <rect x="1" y="1" width="10" height="10" fill="#f25022"/>
+            <rect x="12" y="1" width="10" height="10" fill="#7fba00"/>
+            <rect x="1" y="12" width="10" height="10" fill="#00a4ef"/>
+            <rect x="12" y="12" width="10" height="10" fill="#ffb900"/>
+          </svg>
+          Mit Microsoft anmelden
+        </button>
+        <div style="font-size:11px;color:var(--text3);text-align:center;margin-top:10px">
+          Nur Lesezugriff auf Kalender · Keine Datenweitergabe
+        </div>
+      </div>
+    </div>
+
+    <!-- KALENDER -->
+    <div id="view-calendar" class="view">
+      <div class="week-nav">
+        <div>
+          <div class="week-nav-title" id="week-title">–</div>
+          <div class="week-nav-sub" id="week-sub">–</div>
+        </div>
+        <div style="display:flex;gap:5px">
+          <button class="nav-btn" onclick="prevWeek()">‹</button>
+          <button class="nav-btn" onclick="nextWeek()">›</button>
+        </div>
+      </div>
+
+      <div id="cal-loading" class="loading" style="display:none">
+        <div class="spinner"></div>Kalender wird geladen…
+      </div>
+
+      <div class="sel-bar" id="sel-bar" style="display:none">
+        <span id="sel-count">0 ausgewählt</span>
+        <div>
+          <button class="link-btn" onclick="selectAll()">Alle</button>·
+          <button class="link-btn" onclick="deselectAll()">Keine</button>
+        </div>
+      </div>
+
+      <div id="cal-entries"></div>
+      <button class="btn btn-primary" id="btn-next" onclick="goToExport()" disabled style="margin-top:4px">Weiter zum Export →</button>
+    </div>
+
+    <!-- EXPORT -->
+    <div id="view-export" class="view">
+      <div style="font-size:15px;font-weight:600;margin-bottom:14px">Exportvorschau</div>
+      <div class="warn-box" id="warn-box" style="display:none"></div>
+      <div class="summary-table" id="sum-table"></div>
+      <button class="btn btn-success" onclick="doExport()" style="padding:14px;font-size:14px">
+        📥 Excel exportieren → an visuplus senden
+      </button>
+      <button class="btn-ghost" onclick="showView('view-calendar');setStep(2)" style="margin-top:10px">‹ Zurück zur Auswahl</button>
+    </div>
+
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================================================================
+   KONFIGURATION – BITTE HIER ANPASSEN
+   ================================================================
+   1. CLIENT_ID: Anwendungs-ID aus dem Azure-Portal
+   2. REDIRECT_URI: Deine GitHub Pages URL
+      Format: https://DEIN-GITHUB-NAME.github.io/visuplus/
+   ================================================================ */
+const CLIENT_ID    = "YOUR_CLIENT_ID_HERE";
+const REDIRECT_URI = "https://DEIN-GITHUB-NAME.github.io/visuplus/";
+/* ================================================================ */
+
+const msalCfg = {
+  auth: { clientId: CLIENT_ID, authority: "https://login.microsoftonline.com/common", redirectUri: REDIRECT_URI },
+  cache: { cacheLocation: "localStorage", storeAuthStateInCookie: false }
+};
+const scopes = { scopes: ["User.Read","Calendars.Read"] };
+const msal   = new PublicClientApplication ? new PublicClientApplication(msalCfg) : new window.msal.PublicClientApplication(msalCfg);
+
+let account=null, token=null;
+let weekStart = getMondayOf(new Date());
+let events=[], selected=new Set(), eData={};
+let projects=[], mappings={};
+let settingsOpen=false, deferredInstall=null;
+
+/* ── INIT ─────────────────────────────────── */
+window.addEventListener('load', async () => {
+  loadStorage();
+  try { await msal.initialize(); } catch(e) { /* older MSAL */ }
+  try {
+    const r = await msal.handleRedirectPromise();
+    if (r?.account) { account=r.account; token=r.accessToken; afterLogin(); return; }
+  } catch(e) {}
+  const accs = msal.getAllAccounts();
+  if (accs.length) { account=accs[0]; await refreshToken(); afterLogin(); }
+});
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault(); deferredInstall=e;
+  document.getElementById('install-banner').classList.add('show');
+});
+
+async function doInstall() {
+  if (!deferredInstall) return;
+  deferredInstall.prompt(); await deferredInstall.userChoice;
+  deferredInstall=null; document.getElementById('install-banner').classList.remove('show');
+}
+
+/* ── AUTH ─────────────────────────────────── */
+async function doLogin() {
+  try { await msal.loginRedirect(scopes); } catch(e) { toast("Login-Fehler: "+e.message); }
+}
+async function doLogout() {
+  await msal.logoutRedirect({ postLogoutRedirectUri: REDIRECT_URI });
+}
+async function refreshToken() {
+  try { const r=await msal.acquireTokenSilent({...scopes,account}); token=r.accessToken; }
+  catch(e) { await msal.acquireTokenRedirect(scopes); }
+}
+
+function afterLogin() {
+  const sb = document.getElementById('steps-bar');
+  sb.style.display='flex'; sb.style.visibility='visible';
+  document.getElementById('btn-settings').style.display='block';
+  document.getElementById('btn-logout').style.display='block';
+  document.getElementById('topbar-sub').textContent = account?.username||'Verbunden';
+  goToCalendar();
+}
+
+/* ── NAVIGATION ───────────────────────────── */
+function showView(id) {
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function setStep(n) {
+  ['s1','s2','s3'].forEach((id,i)=>{
+    document.getElementById(id).className='step'+(i+1===n?' active':i+1<n?' done':'');
+  });
+}
+async function goToCalendar() { showView('view-calendar'); setStep(2); await loadCal(); }
+function goToExport() {
+  if (!selected.size) return;
+  showView('view-export'); setStep(3); renderSummary();
+}
+
+/* ── CALENDAR ─────────────────────────────── */
+function getMondayOf(d) {
+  const r=new Date(d); r.setHours(0,0,0,0);
+  const day=r.getDay(); r.setDate(r.getDate()-(day===0?6:day-1)); return r;
+}
+function prevWeek() { weekStart.setDate(weekStart.getDate()-7); loadCal(); }
+function nextWeek() { weekStart.setDate(weekStart.getDate()+7); loadCal(); }
+function toMins(t){const[h,m]=t.split(':').map(Number);return h*60+m;}
+function mStr(m){return Math.floor(m/60)+':'+String(m%60).padStart(2,'0');}
+function dur(e){return toMins(e.end)-toMins(e.start);}
+function kw(d){const u=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const dn=u.getUTCDay()||7;u.setUTCDate(u.getUTCDate()+4-dn);const y=new Date(Date.UTC(u.getUTCFullYear(),0,1));return Math.ceil((((u-y)/86400000)+1)/7);}
+
+async function loadCal() {
+  document.getElementById('cal-loading').style.display='block';
+  document.getElementById('cal-entries').innerHTML='';
+  document.getElementById('sel-bar').style.display='none';
+  document.getElementById('btn-next').disabled=true;
+
+  const weekEnd=new Date(weekStart); weekEnd.setDate(weekEnd.getDate()+5);
+  const fmt=d=>d.toISOString().split('.')[0];
+  const dd=(d,o={day:'2-digit',month:'2-digit'})=>d.toLocaleDateString('de-DE',o);
+  const we2=new Date(weekEnd); we2.setDate(we2.getDate()-1);
+  document.getElementById('week-title').textContent=`KW ${kw(weekStart)} · ${weekStart.getFullYear()}`;
+  document.getElementById('week-sub').textContent=`${dd(weekStart)} – ${dd(we2)}`;
+
+  try {
+    const url=`https://graph.microsoft.com/v1.0/me/calendarView?startDateTime=${fmt(weekStart)}&endDateTime=${fmt(weekEnd)}&$select=subject,start,end&$orderby=start/dateTime&$top=100`;
+    let r=await fetch(url,{headers:{'Authorization':'Bearer '+token,'Prefer':'outlook.timezone="Europe/Berlin"'}});
+    if (r.status===401){await refreshToken();r=await fetch(url,{headers:{'Authorization':'Bearer '+token,'Prefer':'outlook.timezone="Europe/Berlin"'}});}
+    const data=await r.json();
+    events=(data.value||[]).map((e,i)=>({
+      idx:i, title:e.subject||'(kein Titel)',
+      date:e.start.dateTime.substring(0,10),
+      start:e.start.dateTime.substring(11,16),
+      end:e.end.dateTime.substring(11,16)
+    })).filter(e=>e.start<e.end);
+    selected=new Set(events.map((_,i)=>i));
+    eData={};
+    events.forEach((e,i)=>{const f=findMap(e.title);eData[i]=f||{proj:'',pos:'',auto:false};});
+  } catch(err) { toast("Ladefehler: "+err.message); events=[]; }
+
+  document.getElementById('cal-loading').style.display='none';
+  document.getElementById('sel-bar').style.display='flex';
+  renderCal();
+}
+
+const DAYS=['So','Mo','Di','Mi','Do','Fr','Sa'];
+const COLORS=['#2563eb','#7c3aed','#0891b2','#059669','#d97706','#dc2626'];
+function color(s){let h=0;for(let i=0;i<s.length;i++)h=s.charCodeAt(i)+((h<<5)-h);return COLORS[Math.abs(h)%COLORS.length];}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function ea(s){return String(s||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+
+function renderCal() {
+  const con=document.getElementById('cal-entries');
+  if (!events.length){con.innerHTML='<div class="loading" style="padding:30px 0">Keine Termine in dieser Woche</div>';updateCount();return;}
+  const g={};
+  events.forEach((e,i)=>(g[e.date]=g[e.date]||[]).push({...e,idx:i}));
+  con.innerHTML=Object.keys(g).sort().map(date=>{
+    const ents=g[date], d=new Date(date+'T12:00:00');
+    const lbl=DAYS[d.getDay()]+' '+d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'});
+    const selM=ents.filter(e=>selected.has(e.idx)).reduce((s,e)=>s+dur(e),0);
+    const totM=ents.reduce((s,e)=>s+dur(e),0);
+    return `<div class="day-group">
+      <div class="day-hdr"><span>${lbl}</span><span class="day-hrs">${mStr(selM)} / ${mStr(totM)} h</span></div>
+      ${ents.map(e=>cardHtml(e)).join('')}
+    </div>`;
+  }).join('');
+  updateCount();
+}
+
+function cardHtml(e) {
+  const isSel=selected.has(e.idx), ed=eData[e.idx]||{proj:'',pos:'',auto:false};
+  const ok=!!ed.proj&&!!ed.pos;
+  const tc=ok?(ed.auto?'tag-auto':'tag-saved'):'tag-missing';
+  const tt=ok?(ed.auto?'auto':'gespeichert'):(ed.proj||ed.pos?'unvollständig':'fehlt');
+  const opts=projects.map(p=>`<div class="dd-item" onmousedown="pickProj(${e.idx},'${ea(p.num)}','pdd${e.idx}')"><strong>${esc(p.num)}</strong><span>${esc(p.name)}</span></div>`).join('');
+  return `<div class="cal-card ${isSel?'selected':'deselected'}" id="cc${e.idx}">
+    <div class="cal-header" onclick="toggle(${e.idx})">
+      <div class="cal-dot" style="background:${color(e.title)}"></div>
+      <div class="cal-info">
+        <div class="cal-title">${esc(e.title)}</div>
+        <div class="cal-meta"><span>${e.start}–${e.end}</span><span>·</span><strong>${mStr(dur(e))} h</strong><span class="status-tag ${tc}" id="tag${e.idx}">${tt}</span></div>
+      </div>
+      <div class="check ${isSel?'on':''}" id="chk${e.idx}">${isSel?'✓':''}</div>
+    </div>
+    ${isSel?`<div class="entry-fields">
+      <div><label>Projekt (Spalte F)</label>
+        <div class="field-wrap">
+          <input type="text" id="pi${e.idx}" value="${ea(ed.proj)}" placeholder="Projektnummer"
+            onfocus="document.getElementById('pdd${e.idx}').classList.add('open')"
+            onblur="setTimeout(()=>document.getElementById('pdd${e.idx}').classList.remove('open'),160)"
+            oninput="setF(${e.idx},'proj',this.value)">
+          <div class="dropdown" id="pdd${e.idx}">${opts}</div>
+        </div>
+      </div>
+      <div><label>Leistungs-POS (Spalte H)</label>
+        <input type="text" id="hi${e.idx}" value="${ea(ed.pos)}" placeholder="z.B. 010"
+          oninput="setF(${e.idx},'pos',this.value)">
+      </div>
+    </div>`:''}
+  </div>`;
+}
+
+function pickProj(i,num,ddId) {
+  document.getElementById('pi'+i).value=num;
+  setF(i,'proj',num);
+  document.getElementById(ddId).classList.remove('open');
+}
+
+function toggle(i) {
+  selected.has(i)?selected.delete(i):selected.add(i);
+  // Re-render just this card
+  const old=document.getElementById('cc'+i);
+  if (old) { old.outerHTML=cardHtml({...events[i],idx:i}); }
+  updateCount(); updateDayHdrs();
+}
+function selectAll(){events.forEach((_,i)=>selected.add(i));renderCal();}
+function deselectAll(){selected.clear();renderCal();}
+
+function updateCount(){
+  const n=selected.size;
+  document.getElementById('sel-count').textContent=n+' Eintrag'+(n===1?'':'einträge')+' ausgewählt';
+  document.getElementById('btn-next').disabled=n===0;
+}
+function updateDayHdrs(){
+  const g={};events.forEach((e,i)=>(g[e.date]=g[e.date]||[]).push({...e,idx:i}));
+  // handled in full render when needed
+}
+
+function setF(i,field,val){
+  if(!eData[i])eData[i]={proj:'',pos:'',auto:false};
+  eData[i][field]=val; eData[i].auto=false;
+  if(eData[i].proj&&eData[i].pos) learn(events[i].title,eData[i].proj,eData[i].pos);
+  const tag=document.getElementById('tag'+i); if(!tag)return;
+  const ed=eData[i],ok=!!ed.proj&&!!ed.pos;
+  tag.className='status-tag '+(ok?'tag-saved':'tag-missing');
+  tag.textContent=ok?'gespeichert':(ed.proj||ed.pos?'unvollständig':'fehlt');
+}
+
+/* ── EXPORT ───────────────────────────────── */
+function renderSummary(){
+  const sel=[...selected].map(i=>({...events[i],idx:i})).sort((a,b)=>a.date.localeCompare(b.date)||a.start.localeCompare(b.start));
+  const miss=sel.filter(e=>!eData[e.idx]?.proj||!eData[e.idx]?.pos).length;
+  const tot=sel.reduce((s,e)=>s+dur(e),0);
+  const wb=document.getElementById('warn-box');
+  wb.style.display=miss?'block':'none';
+  if(miss)wb.textContent=`⚠ ${miss} Eintrag${miss>1?'einträge haben':'hat'} noch kein Projekt oder keine Leistungs-POS.`;
+  document.getElementById('sum-table').innerHTML=
+    sel.map(e=>{const ed=eData[e.idx]||{},ok=!!ed.proj&&!!ed.pos;
+      return `<div class="sum-row${ok?'':' warn'}">
+        <span class="sum-title">${esc(e.title)}</span>
+        <span class="sum-proj">${esc(ed.proj||'—')}</span>
+        <span class="sum-pos">${esc(ed.pos||'—')}</span>
+        <span class="sum-dur">${mStr(dur(e))} h</span>
+      </div>`;}).join('')+
+    `<div class="sum-row"><span class="sum-title">Gesamt (${sel.length})</span><span></span><span></span><span class="sum-dur">${mStr(tot)} h</span></div>`;
+}
+
+function doExport(){
+  const wb2=XLSX.utils.book_new();
+  const sel=[...selected].map(i=>({...events[i],idx:i})).sort((a,b)=>a.date.localeCompare(b.date)||a.start.localeCompare(b.start));
+  const r1=Array(45).fill(null);r1[0]='visuplus externe Arbeitszeiterfassung';
+  const r2=Array(45).fill(null);
+  r2[0]='Zeilen-nummer';r2[1]='Datum';r2[2]='Lohnart';r2[3]='Zeitdauer';
+  r2[5]='Projekt-/Angebotsnummer/Kostenträger';r2[7]='Leistungs-POS';
+  r2[25]='Kostenstelle';r2[26]='Beginn';r2[27]='Ende';r2[29]='Leistungstext';
+  const rows=sel.map((e,i)=>{
+    const row=Array(45).fill(null), ed=eData[e.idx]||{};
+    row[0]=i+1; row[1]=e.date; row[2]='001'; row[3]=mStr(dur(e));
+    row[5]=ed.proj||''; row[7]=ed.pos||''; row[25]='1000040';
+    row[26]=e.start; row[27]=e.end; row[29]=e.title;
+    return row;
+  });
+  const ws=XLSX.utils.aoa_to_sheet([r1,r2,...rows]);
+  ws['!cols']=Array(45).fill({wch:12});
+  ws['!cols'][1]={wch:14};ws['!cols'][5]={wch:25};ws['!cols'][29]={wch:35};
+  XLSX.utils.book_append_sheet(wb2,ws,'AZVISUPLUS1511');
+  XLSX.writeFile(wb2,`visuplus_KW${kw(weekStart)}_${weekStart.getFullYear()}.xlsx`);
+  toast('Export erfolgreich ✓'); saveStorage();
+}
+
+/* ── LEARNING ─────────────────────────────── */
+function findMap(title){
+  const t=title.toLowerCase();
+  for(const[k,v]of Object.entries(mappings))if(t.includes(k))return{...v,auto:true};
+  return null;
+}
+function learn(title,proj,pos){
+  title.toLowerCase().split(/[\s\-–,]+/).filter(w=>w.length>3).forEach(w=>{mappings[w]={proj,pos};});
+  saveStorage();
+}
+
+/* ── PROJECTS ─────────────────────────────── */
+function toggleSettings(){
+  settingsOpen=!settingsOpen;
+  document.getElementById('settings-panel').classList.toggle('open',settingsOpen);
+  if(settingsOpen)renderProjs();
+}
+function renderProjs(){
+  document.getElementById('proj-list').innerHTML=projects.length
+    ?projects.map((p,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span><strong>${esc(p.num)}</strong>${p.name?' · '+esc(p.name):''}</span>
+        <button onclick="rmProj(${i})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:16px;padding:0 4px">×</button>
+      </div>`).join('')
+    :'<div style="font-size:12px;color:var(--text3);padding:6px 0">Noch keine Projekte gespeichert</div>';
+}
+function addProject(){
+  const num=document.getElementById('np-num').value.trim(), name=document.getElementById('np-name').value.trim();
+  if(!num)return;
+  projects.push({num,name});
+  document.getElementById('np-num').value='';document.getElementById('np-name').value='';
+  saveStorage();renderProjs();toast('Projekt gespeichert ✓');
+}
+function rmProj(i){projects.splice(i,1);saveStorage();renderProjs();}
+
+/* ── STORAGE ──────────────────────────────── */
+function loadStorage(){
+  try{projects=JSON.parse(localStorage.getItem('vp_projects')||'[]');}catch(e){projects=[];}
+  try{mappings=JSON.parse(localStorage.getItem('vp_mappings')||'{}');}catch(e){mappings={};}
+}
+function saveStorage(){
+  localStorage.setItem('vp_projects',JSON.stringify(projects));
+  localStorage.setItem('vp_mappings',JSON.stringify(mappings));
+}
+
+/* ── UTILS ────────────────────────────────── */
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
