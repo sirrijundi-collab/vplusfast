@@ -1,4 +1,4 @@
-  <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="UTF-8">
@@ -241,7 +241,7 @@
       Format: https://DEIN-GITHUB-NAME.github.io/visuplus/
    ================================================================ */
 const CLIENT_ID    = "185f8a9a-6dd4-4042-8478-13fb5397b27f";
-const REDIRECT_URI = "https://sirrijundi-collab.github.io/vplusfast/";
+const REDIRECT_URI = "https://DEIN-GITHUB-NAME.github.io/visuplus/";
 /* ================================================================ */
 
 const msalCfg = {
@@ -249,7 +249,7 @@ const msalCfg = {
   cache: { cacheLocation: "localStorage", storeAuthStateInCookie: false }
 };
 const scopes = { scopes: ["User.Read","Calendars.Read"] };
-const msal   = new PublicClientApplication ? new PublicClientApplication(msalCfg) : new window.msal.PublicClientApplication(msalCfg);
+const msalApp = new window.msal.PublicClientApplication(msalCfg);
 
 let account=null, token=null;
 let weekStart = getMondayOf(new Date());
@@ -260,12 +260,12 @@ let settingsOpen=false, deferredInstall=null;
 /* ── INIT ─────────────────────────────────── */
 window.addEventListener('load', async () => {
   loadStorage();
-  try { await msal.initialize(); } catch(e) { /* older MSAL */ }
+  try { await msalApp.initialize(); } catch(e) { /* older MSAL */ }
   try {
-    const r = await msal.handleRedirectPromise();
+    const r = await msalApp.handleRedirectPromise();
     if (r?.account) { account=r.account; token=r.accessToken; afterLogin(); return; }
   } catch(e) {}
-  const accs = msal.getAllAccounts();
+  const accs = msalApp.getAllAccounts();
   if (accs.length) { account=accs[0]; await refreshToken(); afterLogin(); }
 });
 
@@ -282,14 +282,14 @@ async function doInstall() {
 
 /* ── AUTH ─────────────────────────────────── */
 async function doLogin() {
-  try { await msal.loginRedirect(scopes); } catch(e) { toast("Login-Fehler: "+e.message); }
+  try { await msalApp.loginRedirect(scopes); } catch(e) { toast("Login-Fehler: "+e.message); }
 }
 async function doLogout() {
-  await msal.logoutRedirect({ postLogoutRedirectUri: REDIRECT_URI });
+  await msalApp.logoutRedirect({ postLogoutRedirectUri: REDIRECT_URI });
 }
 async function refreshToken() {
-  try { const r=await msal.acquireTokenSilent({...scopes,account}); token=r.accessToken; }
-  catch(e) { await msal.acquireTokenRedirect(scopes); }
+  try { const r=await msalApp.acquireTokenSilent({...scopes,account}); token=r.accessToken; }
+  catch(e) { await msalApp.acquireTokenRedirect(scopes); }
 }
 
 function afterLogin() {
