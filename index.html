@@ -944,7 +944,22 @@ function saveStorage(){
 /* ── UTILS ────────────────────────────────── */
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
 
-if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker'in navigator){
+  navigator.serviceWorker.register('sw.js').then(reg=>{
+    // Bei Update: sofort neu laden
+    reg.addEventListener('updatefound',()=>{
+      const nw=reg.installing;
+      if(nw)nw.addEventListener('statechange',()=>{
+        if(nw.state==='installed'&&navigator.serviceWorker.controller){
+          toast('Neue Version verfügbar – wird geladen...');
+          setTimeout(()=>location.reload(),1500);
+        }
+      });
+    });
+    // Periodisch nach Updates suchen
+    setInterval(()=>reg.update(),60000);
+  }).catch(()=>{});
+}
 </script>
 </body>
 </html>
